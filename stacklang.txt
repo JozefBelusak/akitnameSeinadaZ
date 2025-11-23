@@ -1,0 +1,103 @@
+StackLang specification (SLANG)
+==============================
+
+1. Overview
+-----------
+StackLang is a deterministic, concatenative DSL that operates on a stack of natural
+numbers. Programs are finite sequences of primitive commands that manipulate the
+stack. The SLANG specification below captures its syntax, denotational semantics
+and an executable semantic rule set.
+
+2. Syntax
+---------
+Syntactic domains:
+  Nat      ::= {0, 1, 2, ...}
+  Stack    ::= Nat*
+  Cmd      ::= load Nat | add | sub | mul | dup
+  Program  ::= Cmd*
+
+BNF-style production rules:
+  <nat>        ::= 0 | 1 | 2 | ...
+  <stack>      ::= [] | <nat> :: <stack>
+  <cmd>        ::= "load" <nat>
+                 | "add"
+                 | "sub"
+                 | "mul"
+                 | "dup"
+  <program>    ::= <cmd> <program> | ε
+
+The first listed element of a stack is considered the top of the stack.
+
+3. Denotational semantics
+-------------------------
+Semantic domains:
+  Value    = Nat
+  Stack    = list(Value)
+  CmdDen   = Stack -> option Stack
+  ProgDen  = Program -> Stack -> option Stack
+
+Semantic functions (written using ASCII λ-calculus notation):
+  [[load a]](σ) = Some (a :: σ)
+  [[add]](x :: y :: σ) = Some ((x + y) :: σ)
+  [[add]](σ) = None                                  otherwise
+  [[sub]](x :: y :: σ) = Some ((y - x) :: σ)         if x <= y
+  [[sub]](σ) = None                                  otherwise
+  [[mul]](x :: y :: σ) = Some ((x * y) :: σ)
+  [[mul]](σ) = None                                  otherwise
+  [[dup]](x :: σ) = Some (x :: x :: σ)
+  [[dup]](σ) = None                                  otherwise
+
+Program semantics is defined by right fold (∘ denotes Kleisli composition for option):
+  [[ε]](σ) = Some σ
+  [[c · p]](σ) = [[p]] ∘ [[c]] (σ)
+
+For every program p and initial stack σ, [[p]](σ) yields at most one stack. Failure
+is reported as None when preconditions (enough operands, non-negative subtraction)
+are not met.
+
+4. SLANG executable specification
+---------------------------------
+The following snippet mirrors the theoretical semantics in the SLANG DSL syntax:
+
+```
+LANG StackLang
+DOMAIN
+  Value   ::= Nat
+  Stack   ::= List(Value)
+  Result  ::= Stack | error
+SYNTAX
+  Cmd     ::= load Nat | add | sub | mul | dup
+  Program ::= Cmd*
+SEMANTICS
+  meaning load n   sigma = push(n, sigma)
+  meaning add      (x :: y :: sigma) = push(x + y, sigma)
+  meaning add      sigma = error
+  meaning sub      (x :: y :: sigma) when x <= y = push(y - x, sigma)
+  meaning sub      sigma = error
+  meaning mul      (x :: y :: sigma) = push(x * y, sigma)
+  meaning mul      sigma = error
+  meaning dup      (x :: sigma) = push(x, push(x, sigma))
+  meaning dup      sigma = error
+  meaning []       sigma = sigma
+  meaning (c :: p) sigma = meaning p (meaning c sigma)
+```
+
+5. Example evaluation
+---------------------
+Program: load 3 load 4 add dup mul
+  σ₀ = []
+  σ₁ = [[load 3]](σ₀) = [3]
+  σ₂ = [[load 4]](σ₁) = [4, 3]
+  σ₃ = [[add]](σ₂) = [7]
+  σ₄ = [[dup]](σ₃) = [7, 7]
+  σ₅ = [[mul]](σ₄) = [49]
+
+The resulting stack has 49 on top, matching the assignment's expected outcome.
+
+6. Input conditions
+-------------------
+* All arithmetic commands require sufficient operands; otherwise evaluation fails.
+* The language is restricted to natural numbers; subtraction requires the second
+  operand to be at least as large as the first.
+* Either an error value or an exception may be returned when a program violates
+  the preconditions above.
