@@ -1,0 +1,183 @@
+// -------------------------------------------------------------------------
+// StackLang.txt
+// (c) 2025
+// 
+// -------------------------------------------------------------------------
+
+language StackLang
+{
+  target java
+  {
+    header
+    {#
+      package lang.stacklang;
+      import java.util.*;
+      import java.util.ArrayDeque;
+      import java.util.Deque;
+      import static lang.stacklang.StackLang.*;
+    #}
+  }
+
+  // ----------------------------------------------------------------------
+  // syntactic domains
+  // ----------------------------------------------------------------------
+  domains
+ {
+    Value    = Num[NUM];
+    Command  = Load[Value] + Add + Sub + Mul + Dup + Seq[Command,Command];
+    Program  = Prog[Command];
+  }
+
+  // -----------------------------------------------------------------------
+  // printer
+  // -----------------------------------------------------------------------
+  printer
+  {
+    domain Value
+    {
+      case Num[n] → # _result = n; #;
+    }
+    domain Command
+    {
+      case Load[e] → # _result = "load " + e; #;
+      case Add → # _result = "add"; #;
+      case Sub → # _result = "sub"; #;
+      case Mul → # _result = "mul"; #;
+      case Dup → # _result = "dup"; #;
+      case Seq[c1,c2] → # _result = c1 + " " + c2; #;
+    }
+    domain Program
+    {
+      case Prog[c] → # _result = c.toString(); #;
+    }
+  }
+  
+  // -----------------------------------------------------------------------
+  // parser
+  // -----------------------------------------------------------------------
+  parser antlr4
+  {
+    domain Value
+    {
+      case # n=dNUM # → Num[n];
+    }
+    domain Command
+    {
+      case # 'load' v=dValue # → Load[v];
+      case # 'add' # → Add;
+      case # 'sub' # → Sub;
+      case # 'mul' # → Mul;
+      case # 'dup' # → Dup;
+      case # c1=dCommand c2=dCommand # → Seq[c1,c2];
+    }
+    domain Program
+    {
+      case # c=dCommand EOF # → Prog[c];
+    }
+  }
+  
+  // -----------------------------------------------------------------------
+  // type system
+  // -----------------------------------------------------------------------
+  code
+  {#
+    public enum Type { Int }
+    public static class TypeError extends RuntimeException
+    { public TypeError(String msg) { super(msg); } }
+  #}
+  judgment ⊢ Value: value
+  {
+    inference ⊢ Num[n]: value { }
+  }
+  judgment ⊢ Command: command
+  {
+    inference ⊢ Load[v]: command { ⊢ v: value; }
+    inference ⊢ Add: command { }
+    inference ⊢ Sub: command { }
+    inference ⊢ Mul: command { }
+    inference ⊢ Dup: command { }
+    inference ⊢ Seq[c1,c2]: command { ⊢ c1: command; ⊢ c2: command; }
+  }
+  judgment ⊢ Program: program
+  {
+    inference ⊢ Prog[c]: program { ⊢ c: command; }
+  }
+  
+  // -----------------------------------------------------------------------
+  // denotational semantics
+  // -----------------------------------------------------------------------
+  code
+  {#
+    public static class Failure extends RuntimeException
+    { public Failure(String msg){ super(msg); } }
+    static void req(boolean b, String msg){ if(!b) throw new Failure(msg); }
+  #}
+  function 〚Value〛: #Integer#
+  {
+    equation 〚Num[n]〛 = v
+    {
+      v = #Integer.valueOf(n)#;
+    }
+  }
+  function 〚Command〛: #Deque<Integer># → #Deque<Integer>#
+  {
+    equation 〚Seq[c1,c2]〛(stack) = newStack
+    {
+      tempStack = 〚c1〛(stack);
+      newStack = 〚c2〛(tempStack);
+    }
+    equation 〚Load[v]〛(stack) = newStack
+    {
+      value = 〚v〛;
+      newStack = # new ArrayDeque<>(stack) #;
+      # if(value < 0) throw new Failure("Value is negative!"); #
+      # newStack.push(value); #
+    }
+    equation 〚Add〛 (stack) = newStack
+    {
+      # if(stack.size() < 2) throw new Failure("Add operation cannot work with less then 2 values!"); #
+      newStack = # new ArrayDeque<>(stack) #; 
+      # int x = newStack.pop(); #
+      # int y = newStack.pop(); #
+      # newStack.push(y + x); #
+    }
+    equation 〚Sub〛 (stack) = newStack
+    {
+      # if(stack.size() < 2) throw new Failure("Sub operation cannot work with less then 2 values!"); # 
+      newStack = # new ArrayDeque<>(stack) #;
+      # int x = newStack.pop(); #
+      # int y = newStack.pop(); #
+      # int result = y - x; #
+      # if(result < 0) throw new Failure("Sub operation result is negative!"); #
+      # newStack.push(result); #
+    }
+    equation 〚Mul〛 (stack) = newStack
+    {
+      # if(stack.size() < 2) throw new Failure("Mul operation cannot work with less then 2 values!"); # 
+      newStack = # new ArrayDeque<>(stack) #;
+      # int x = newStack.pop(); #
+      # int y = newStack.pop(); #
+      # newStack.push(y * x); #
+    }
+    equation 〚Dup〛 (stack) = newStack
+    {
+      # if(stack.size() < 1) throw new Failure("Dup operation cannot work with less then 1 value!"); # 
+      newStack = # new ArrayDeque<>(stack) #;
+      # int x = newStack.peek();
+      newStack.push(x); #
+    }
+  }
+  function 〚Program〛: #Void#
+  {
+    equation 〚Prog[c]〛 = none
+    {
+      stack: #Deque<Integer># = # new ArrayDeque<>() #;
+      newStack = 〚c〛(stack);
+      # System.out.println(newStack); #
+      none = # null #;
+    }
+  }
+}
+// -------------------------------------------------------------------------
+// end of file
+// -------------------------------------------------------------------------

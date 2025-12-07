@@ -1,0 +1,142 @@
+// ---------------------------------------------------------------------------
+// SLANG.g4
+// Semantics Language Generator ANTLR4 Grammar 
+// $Id: SLANG.g4,v 1.12 2023/07/13 15:13:29 schreine Exp schreine $
+//
+// (c) 2023 https://www.risc.jku.at/research/formal/software/SLANG
+// Wolfgang.Schreiner <Wolfgang.Schreiner@risc.jku.at>
+// William Steingartner <william.steingartner@tuke.sk>
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
+// ----------------------------------------------------------------------------
+
+grammar SLANG;
+
+options 
+{
+  language=Java;
+}
+
+@header 
+{
+  package slang.parser;
+}
+
+// ---------------------------------------------------------------------------
+// problems and declarations
+// ---------------------------------------------------------------------------
+
+// languages
+language: 'language' id '{'( ';' )* ( clause ( ';' )* )* '}' EOF ;
+
+// clauses
+clause:
+  'target' 'java' '{' 'header' literal '}'    #Target
+| 'code' literal                              #Code
+| 'domains' '{' ( domaindef )* '}'            #Domains
+| 'printer' '{' ( printerdomain )* '}'        #Printer
+| 'parser' 'antlr4' '{' ( parserdomain )* '}' #Parser
+| ( 'judgment' | 'judgement' ) ( in=types )? ( '⊢' | '|-' ) 
+  domain=id ':' fun=id ( '(' out=types ')' )? '{' ( rulex )* '}' 
+  ( 'before' ( bin=ids )? ( '⊢' | '|-' ) bid=id ':' 
+     before=id ( '(' bout=ids ')' )? bliteral=literal )?
+  ( 'after' ( ain=ids )? ( '⊢' | '|-' ) aid=id ':' 
+     after=id ( '(' aout=ids ')' )? aliteral=literal )?   #Judgment
+| 'function' ( fun=id )? ( '〚' | '[[' ) domain=id ( '〛' | ']]' ) 
+  ':' ( in=types ( '→' | '->' ) )? out=types '{' ( equation )* '}' 
+  ( 'before' ( before=id )? ( '〚' | '[[' ) bid=id ( '〛' | ']]' ) 
+  ( '(' bin=ids ')' )? bliteral=literal )? 
+  ( 'after' ( after=id )? ( '〚' | '[[' ) aid=id ( '〛' | ']]' ) 
+  ( '(' ain=ids ')' )? '=' aout=ids aliteral=literal )?   #Function
+;
+
+// domains and their constructors
+domaindef: id '=' domaincon ( '+' domaincon )* ';' ;
+domaincon: id ( '[' ( id ( ',' id )* ) ']' )? ;
+
+// printers
+printerdomain: 'domain' id '{' ( printercase )* '}' ;
+printercase: 'case' domainpattern ( '→' | '->' ) literal ';' ;
+
+// parsers
+parserdomain: 'domain' id ( 'prefix' literal )? '{' ( parsercase )* '}' ;
+parsercase: 'case' literal ( '→' | '->' ) domainexp ';' ;
+
+// rules and equations
+rulex : // symbol 'rule' is not allowed by ANTLR4
+  'rule' ( in=ids )? ( '⊢' | '|-' ) domainpattern ':' id ( '(' out=ids ')' )?
+  commands ( 'before' before=literal )? ( 'after' after=literal )?
+;
+equation :
+  'equation' ( id )? ( '〚' | '[[' ) domainpattern ( '〛' | ']]' ) 
+  ( '(' in=ids ')' )? '=' out=ids 
+  commands ( 'before' before=literal )? ( 'after' after=literal )?
+;
+
+// commands
+command :
+  literal                                           #CommandLiteral
+| ids ( '⊢' | '|-' ) id ':' id ( '(' ids ')' )? ';' #Inference
+| ids '=' value ';'                                 #Assignment
+| ( 'var' )? variables ( '=' value )? ';'           #Declaration
+;
+
+// auxiliaries
+variable: type id ;
+value: 
+  id                       #ValueId
+| literal                  #ValueLiteral
+| ( fun=id )? ( '〚' | '[[' ) domain=id ( '〛' | ']]' )
+  ( '(' values ')' )?      #Application
+;
+domainpattern: id ( '[' ids ']' )? ;
+domainexp: 
+  literal                    #DomainExpLiteral
+| id ( '[' domainexps ']' )? #DomainExpApplication
+;
+type: literal ;
+
+// sequences
+types: type ( ( '×' | '*' | ',' ) type )* ;
+commands: '{' ( command )* '}' ;
+values : value ( ',' value )* ;
+variables: variable ( ',' variable )* ;
+domainexps : domainexp ( ',' domainexp )* ;
+ids: id ( ',' id )* ;
+
+// wrappers for lexer domains
+id: ID ; 
+literal: LITA | LITB | LITC | LITD ;
+
+// ---------------------------------------------------------------------------
+// lexical rules
+// ---------------------------------------------------------------------------
+
+ID   : [a-zA-Z_][a-zA-Z_0-9]* ;
+
+LITA : '{##' .*? '##}' ;
+LITB : '##' .*? '##' ;
+LITC : '{#' .*? '#}' ;
+LITD : '#' .*? '#' ;
+
+WHITESPACE  : [ \t\r\n\f]+ -> skip ;
+LINECOMMENT : '//' .*? '\r'? ('\n' | EOF) -> skip ;
+COMMENT     : '/*' .*? '*/' -> skip ;
+
+// matches any other character
+ERROR : . ;
+
+// ---------------------------------------------------------------------------
+// end of file
+// ---------------------------------------------------------------------------

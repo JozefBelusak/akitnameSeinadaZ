@@ -1,3 +1,6 @@
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -7,17 +10,19 @@ import java.util.Locale;
 import java.util.function.BiPredicate;
 import java.util.function.LongBinaryOperator;
 
-/**
- * Reference interpreter for the StackLang DSL.
- */
-public final class Main {
+public final class StackLangMain {
     private static final String DEFAULT_PROGRAM = "load 3 load 4 add dup mul";
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws IOException {
         List<String> tokens;
         if (args.length == 0) {
-            tokens = Arrays.asList(DEFAULT_PROGRAM.trim().split("\\s+"));
-            System.out.println("No arguments supplied, running default program: " + DEFAULT_PROGRAM);
+            tokens = readTokensFromStdIn();
+            if (tokens.isEmpty()) {
+                tokens = Arrays.asList(DEFAULT_PROGRAM.split("\\s+"));
+                System.out.println("No input detected, running default program: " + DEFAULT_PROGRAM);
+            } else {
+                System.out.println("Read " + tokens.size() + " tokens from standard input.");
+            }
         } else {
             tokens = Arrays.asList(args);
         }
@@ -32,6 +37,21 @@ public final class Main {
             System.err.println("Error: " + ex.getMessage());
             System.exit(1);
         }
+    }
+
+    private static List<String> readTokensFromStdIn() throws IOException {
+        List<String> tokens = new ArrayList<>();
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(System.in))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                for (String part : line.trim().split("\\s+")) {
+                    if (!part.isEmpty()) {
+                        tokens.add(part);
+                    }
+                }
+            }
+        }
+        return tokens;
     }
 
     private interface Instruction {
@@ -103,8 +123,7 @@ public final class Main {
     }
 
     private static final class ProgramParser {
-        private ProgramParser() {
-        }
+        private ProgramParser() {}
 
         static List<Instruction> parse(List<String> tokens) {
             List<Instruction> program = new ArrayList<>();
@@ -119,7 +138,7 @@ public final class Main {
                         i += 2;
                     }
                     case "add" -> {
-                        program.add(new BinaryInstruction("add", (a, b) -> a + b, (a, b) -> true));
+                        program.add(new BinaryInstruction("add", Long::sum, (a, b) -> true));
                         i++;
                     }
                     case "sub" -> {
@@ -138,7 +157,7 @@ public final class Main {
                         program.add(new DupInstruction());
                         i++;
                     }
-                    case "" -> i++; // skip accidental empty tokens
+                    case "" -> i++;
                     default -> throw new IllegalArgumentException("Unknown token: " + token);
                 }
             }

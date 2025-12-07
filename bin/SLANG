@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+set -euo pipefail
+ROOT=$(cd "$(dirname "$0")/.." && pwd)
+LANG_DIR="$ROOT/languages"
+CLASS_DIR="$LANG_DIR"
+
+javac -d "$CLASS_DIR" "$LANG_DIR/StackLangMain.java"
+
+echo "==========================================="
+echo "Type StackLang commands and press Ctrl+D"
+echo "Example: load 3 load 4 add dup mul"
+echo "==========================================="
+echo
+java -cp "$CLASS_DIR" StackLangMain "$@"
